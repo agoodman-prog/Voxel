@@ -91,152 +91,693 @@
         <div class="slot" id="slot-8"><span class="key">8</span>Wood (0)</div>
     </div>
 
+    <!-- Primary CDN with Fallback Loader -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        if (typeof THREE === 'undefined') {
+            document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');
+        }
+    </script>
 
     <script>
-        // --- 1. Procedural Pixel Textures ---
-        function createPixelTexture(baseHex, noiseScale = 25, pattern = '') {
-            const canvas = document.createElement('canvas');
-            canvas.width = 16; canvas.height = 16;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = baseHex;
-            ctx.fillRect(0, 0, 16, 16);
+        window.addEventListener('load', () => {
+            if (typeof THREE === 'undefined') {
+                alert("Three.js failed to load. Please check your internet connection or browser extension settings.");
+                return;
+            }
+            initGame();
+        });
 
-            for (let x = 0; x < 16; x++) {
-                for (let y = 0; y < 16; y++) {
-                    if (Math.random() > 0.4) {
-                        const val = Math.floor(Math.random() * noiseScale);
-                        ctx.fillStyle = `rgba(0,0,0,${val / 100})`;
-                        ctx.fillRect(x, y, 1, 1);
+        function initGame() {
+            // --- 1. Procedural Pixel Textures ---
+            function createPixelTexture(baseHex, noiseScale = 25, pattern = '') {
+                const canvas = document.createElement('canvas');
+                canvas.width = 16; canvas.height = 16;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = baseHex;
+                ctx.fillRect(0, 0, 16, 16);
+
+                for (let x = 0; x < 16; x++) {
+                    for (let y = 0; y < 16; y++) {
+                        if (Math.random() > 0.4) {
+                            const val = Math.floor(Math.random() * noiseScale);
+                            ctx.fillStyle = `rgba(0,0,0,${val / 100})`;
+                            ctx.fillRect(x, y, 1, 1);
+                        }
+                    }
+                }
+
+                if (pattern === 'grass_side') {
+                    ctx.fillStyle = '#55a02e';
+                    ctx.fillRect(0, 0, 16, 4);
+                    for (let i = 0; i < 16; i += 2) {
+                        ctx.fillRect(i, 4, 1, Math.floor(Math.random() * 3) + 1);
+                    }
+                } else if (pattern === 'iron') {
+                    ctx.fillStyle = '#d89c5c';
+                    for (let i = 0; i < 8; i++) {
+                        ctx.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 14), 2, 2);
+                    }
+                } else if (pattern === 'diamond') {
+                    ctx.fillStyle = '#4be3e3';
+                    for (let i = 0; i < 6; i++) {
+                        ctx.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 14), 2, 2);
+                    }
+                }
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.magFilter = THREE.NearestFilter;
+                texture.minFilter = THREE.NearestFilter;
+                return texture;
+            }
+
+            // --- 2. Materials ---
+            const materials = {
+                grassTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#55a02e') }),
+                grassSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33', 25, 'grass_side') }),
+                dirt: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33') }),
+                stone: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373') }),
+                ironOre: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373', 25, 'iron') }),
+                diamondOre: new THREE.MeshLambertMaterial({ map: createPixelTexture('#5c5c5c', 25, 'diamond') }),
+                bedrock: new THREE.MeshLambertMaterial({ map: createPixelTexture('#222222', 40) }),
+                woodSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#61462b') }),
+                woodTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#7a5c3e') }),
+                leaves: new THREE.MeshLambertMaterial({ map: createPixelTexture('#2d6e1a'), transparent: true, opacity: 0.9 }),
+                pig: new THREE.MeshLambertMaterial({ map: createPixelTexture('#f0938d', 10) }),
+                pigHurt: new THREE.MeshLambertMaterial({ color: 0xff3333 }),
+                diamond: new THREE.MeshLambertMaterial({ color: 0x4be3e3 }),
+                iron: new THREE.MeshLambertMaterial({ color: 0xd8d8d8 }),
+                woodHandle: new THREE.MeshLambertMaterial({ color: 0x5c4028 }),
+                meat: new THREE.MeshLambertMaterial({ map: createPixelTexture('#c24236', 15) })
+            };
+
+            const blockMaterials = {
+                1: [materials.grassSide, materials.grassSide, materials.grassTop, materials.dirt, materials.grassSide, materials.grassSide],
+                2: materials.dirt,
+                3: materials.stone,
+                4: materials.ironOre,
+                5: materials.diamondOre,
+                6: [materials.woodSide, materials.woodSide, materials.woodTop, materials.woodTop, materials.woodSide, materials.woodSide],
+                7: materials.leaves,
+                8: materials.bedrock
+            };
+
+            // --- 3. Player & HUD State ---
+            let playerHealth = 100;
+            const maxHealth = 100;
+
+            function updateHealthUI() {
+                const healthBar = document.getElementById('health-bar');
+                const percent = Math.max(0, (playerHealth / maxHealth) * 100);
+                healthBar.style.width = percent + '%';
+            }
+
+            function takeDamage(amount) {
+                playerHealth -= amount;
+                if (playerHealth <= 0) {
+                    playerHealth = 0;
+                    respawnPlayer();
+                }
+                updateHealthUI();
+            }
+
+            function healPlayer(amount) {
+                playerHealth = Math.min(maxHealth, playerHealth + amount);
+                updateHealthUI();
+            }
+
+            function respawnPlayer() {
+                camera.position.set(0, 12, 0);
+                playerHealth = 100;
+                updateHealthUI();
+            }
+
+            const inventory = {
+                1: { name: 'Pickaxe', type: 'tool' },
+                2: { name: 'Sword', type: 'tool' },
+                3: { name: 'Meat', type: 'item', count: 0 },
+                4: { name: 'Dirt', type: 'block', blockType: 2, count: 0 },
+                5: { name: 'Stone', type: 'block', blockType: 3, count: 0 },
+                6: { name: 'Iron Ore', type: 'block', blockType: 4, count: 0 },
+                7: { name: 'Diamond', type: 'block', blockType: 5, count: 0 },
+                8: { name: 'Wood', type: 'block', blockType: 6, count: 0 }
+            };
+
+            let activeSlot = 1;
+
+            function updateHotbarUI() {
+                for (let i = 1; i <= 8; i++) {
+                    const slotEl = document.getElementById(`slot-${i}`);
+                    const item = inventory[i];
+                    if (item.type === 'tool') {
+                        slotEl.innerHTML = `<span class="key">${i}</span>${item.name}`;
+                    } else {
+                        slotEl.innerHTML = `<span class="key">${i}</span>${item.name}<br>(${item.count})`;
+                    }
+                    slotEl.classList.toggle('active', i === activeSlot);
+                }
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key >= '1' && e.key <= '8') {
+                    activeSlot = parseInt(e.key);
+                    updateHotbarUI();
+                    updateHeldItemVisibility();
+                }
+            });
+
+            // --- 4. Scene Setup ---
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x7ec0ee);
+            scene.fog = new THREE.FogExp2(0x7ec0ee, 0.025);
+
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            scene.add(camera);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.body.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.55);
+            dirLight.position.set(20, 40, 20);
+            scene.add(dirLight);
+
+            // --- 5. First-Person View Model Items ---
+            const pickaxeGroup = new THREE.Group();
+            const pickHandle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), materials.woodHandle);
+            pickHandle.position.set(0, 0.2, 0);
+            const pickHead = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.1), materials.iron);
+            pickHead.position.set(0, 0.5, 0);
+            pickaxeGroup.add(pickHandle, pickHead);
+            pickaxeGroup.position.set(0.4, -0.3, -0.5);
+            pickaxeGroup.rotation.set(0.2, -0.2, -0.2);
+            camera.add(pickaxeGroup);
+
+            const swordGroup = new THREE.Group();
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.05), materials.diamond);
+            blade.position.set(0, 0.4, 0);
+            const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.08), materials.diamond);
+            hilt.position.set(0, 0, 0);
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), materials.woodHandle);
+            handle.position.set(0, -0.15, 0);
+            swordGroup.add(blade, hilt, handle);
+            swordGroup.position.set(0.4, -0.3, -0.5);
+            swordGroup.rotation.set(0.2, -0.2, -0.2);
+            swordGroup.visible = false;
+            camera.add(swordGroup);
+
+            const heldMeatGroup = new THREE.Group();
+            const heldMeat = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.2, 0.25), materials.meat);
+            heldMeatGroup.add(heldMeat);
+            heldMeatGroup.position.set(0.35, -0.35, -0.4);
+            heldMeatGroup.visible = false;
+            camera.add(heldMeatGroup);
+
+            function updateHeldItemVisibility() {
+                pickaxeGroup.visible = (activeSlot === 1);
+                swordGroup.visible = (activeSlot === 2);
+                heldMeatGroup.visible = (activeSlot === 3 && inventory[3].count > 0);
+            }
+
+            let isSwinging = false;
+            let swingProgress = 0;
+
+            function triggerSwing() {
+                if (!isSwinging) {
+                    isSwinging = true;
+                    swingProgress = 0;
+                }
+            }
+
+            // --- 6. Dynamic Endless World Generation Engine ---
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const blocks = new Map();
+            const loadedChunks = new Map();
+
+            const CHUNK_SIZE = 12;
+            const RENDER_DISTANCE = 2;
+            const maxDepth = -12;
+
+            function getBlockKey(x, y, z) { return `${x},${y},${z}`; }
+            function getChunkKey(cx, cz) { return `${cx},${cz}`; }
+
+            function getTerrainHeight(x, z) {
+                return Math.floor(Math.sin(x * 0.15) * Math.cos(z * 0.15) * 2.5 + Math.sin((x + z) * 0.08) * 1.5) + 4;
+            }
+
+            function createBlock(x, y, z, type, chunkKey) {
+                const mesh = new THREE.Mesh(geometry, blockMaterials[type]);
+                mesh.position.set(x, y, z);
+                mesh.userData = { type, x, y, z, chunkKey };
+                scene.add(mesh);
+                blocks.set(getBlockKey(x, y, z), mesh);
+                return mesh;
+            }
+
+            function createTree(x, startY, z, chunkKey) {
+                const height = 4;
+                for (let i = 0; i < height; i++) createBlock(x, startY + i, z, 6, chunkKey);
+                for (let lx = -2; lx <= 2; lx++) {
+                    for (let ly = height - 2; ly <= height + 1; ly++) {
+                        for (let lz = -2; lz <= 2; lz++) {
+                            if (Math.abs(lx) === 2 && Math.abs(lz) === 2) continue;
+                            const key = getBlockKey(x + lx, startY + ly, z + lz);
+                            if (!blocks.has(key)) createBlock(x + lx, startY + ly, z + lz, 7, chunkKey);
+                        }
                     }
                 }
             }
 
-            if (pattern === 'grass_side') {
-                ctx.fillStyle = '#55a02e';
-                ctx.fillRect(0, 0, 16, 4);
-                for (let i = 0; i < 16; i += 2) {
-                    ctx.fillRect(i, 4, 1, Math.floor(Math.random() * 3) + 1);
+            function generateChunk(cx, cz) {
+                const chunkKey = getChunkKey(cx, cz);
+                if (loadedChunks.has(chunkKey)) return;
+
+                const chunkBlocks = [];
+                const startX = cx * CHUNK_SIZE;
+                const startZ = cz * CHUNK_SIZE;
+
+                for (let x = startX; x < startX + CHUNK_SIZE; x++) {
+                    for (let z = startZ; z < startZ + CHUNK_SIZE; z++) {
+                        const height = getTerrainHeight(x, z);
+
+                        for (let y = maxDepth; y <= height; y++) {
+                            let blockMesh = null;
+                            if (y === maxDepth) {
+                                blockMesh = createBlock(x, y, z, 8, chunkKey);
+                            } else if (y === height) {
+                                blockMesh = createBlock(x, y, z, 1, chunkKey);
+                                if ((x % 9 === 0) && (z % 9 === 0)) {
+                                    createTree(x, y + 1, z, chunkKey);
+                                }
+                            } else if (y > height - 2) {
+                                blockMesh = createBlock(x, y, z, 2, chunkKey);
+                            } else {
+                                const hash = Math.abs(Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453) % 1;
+                                if (y < -4 && hash < 0.05) {
+                                    blockMesh = createBlock(x, y, z, 5, chunkKey);
+                                } else if (y < 2 && hash < 0.12) {
+                                    blockMesh = createBlock(x, y, z, 4, chunkKey);
+                                } else {
+                                    blockMesh = createBlock(x, y, z, 3, chunkKey);
+                                }
+                            }
+                            if (blockMesh) chunkBlocks.push(blockMesh);
+                        }
+                    }
                 }
-            } else if (pattern === 'iron') {
-                ctx.fillStyle = '#d89c5c';
-                for (let i = 0; i < 8; i++) {
-                    ctx.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 14), 2, 2);
-                }
-            } else if (pattern === 'diamond') {
-                ctx.fillStyle = '#4be3e3';
-                for (let i = 0; i < 6; i++) {
-                    ctx.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 14), 2, 2);
+                loadedChunks.set(chunkKey, chunkBlocks);
+
+                if (Math.abs(cx) > 0 || Math.abs(cz) > 0) {
+                    if (Math.random() < 0.3) {
+                        createPig(startX + 4, startZ + 4);
+                    }
                 }
             }
 
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.magFilter = THREE.NearestFilter;
-            texture.minFilter = THREE.NearestFilter;
-            return texture;
-        }
-
-        // --- 2. Materials ---
-        const materials = {
-            grassTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#55a02e') }),
-            grassSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33', 25, 'grass_side') }),
-            dirt: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33') }),
-            stone: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373') }),
-            ironOre: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373', 25, 'iron') }),
-            diamondOre: new THREE.MeshLambertMaterial({ map: createPixelTexture('#5c5c5c', 25, 'diamond') }),
-            bedrock: new THREE.MeshLambertMaterial({ map: createPixelTexture('#222222', 40) }),
-            woodSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#61462b') }),
-            woodTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#7a5c3e') }),
-            leaves: new THREE.MeshLambertMaterial({ map: createPixelTexture('#2d6e1a'), transparent: true, opacity: 0.9 }),
-            pig: new THREE.MeshLambertMaterial({ map: createPixelTexture('#f0938d', 10) }),
-            pigHurt: new THREE.MeshLambertMaterial({ color: 0xff3333 }),
-            diamond: new THREE.MeshLambertMaterial({ color: 0x4be3e3 }),
-            iron: new THREE.MeshLambertMaterial({ color: 0xd8d8d8 }),
-            woodHandle: new THREE.MeshLambertMaterial({ color: 0x5c4028 }),
-            meat: new THREE.MeshLambertMaterial({ map: createPixelTexture('#c24236', 15) })
-        };
-
-        const blockMaterials = {
-            1: [materials.grassSide, materials.grassSide, materials.grassTop, materials.dirt, materials.grassSide, materials.grassSide],
-            2: materials.dirt,
-            3: materials.stone,
-            4: materials.ironOre,
-            5: materials.diamondOre,
-            6: [materials.woodSide, materials.woodSide, materials.woodTop, materials.woodTop, materials.woodSide, materials.woodSide],
-            7: materials.leaves,
-            8: materials.bedrock
-        };
-
-        // --- 3. Player & HUD State ---
-        let playerHealth = 100;
-        const maxHealth = 100;
-
-        function updateHealthUI() {
-            const healthBar = document.getElementById('health-bar');
-            const percent = Math.max(0, (playerHealth / maxHealth) * 100);
-            healthBar.style.width = percent + '%';
-        }
-
-        function takeDamage(amount) {
-            playerHealth -= amount;
-            if (playerHealth <= 0) {
-                playerHealth = 0;
-                respawnPlayer();
+            function unloadChunk(chunkKey) {
+                if (!loadedChunks.has(chunkKey)) return;
+                const chunkBlocks = loadedChunks.get(chunkKey);
+                chunkBlocks.forEach(mesh => {
+                    const bKey = getBlockKey(mesh.userData.x, mesh.userData.y, mesh.userData.z);
+                    scene.remove(mesh);
+                    blocks.delete(bKey);
+                });
+                loadedChunks.delete(chunkKey);
             }
-            updateHealthUI();
-        }
 
-        function healPlayer(amount) {
-            playerHealth = Math.min(maxHealth, playerHealth + amount);
-            updateHealthUI();
-        }
+            let lastPlayerChunkX = null;
+            let lastPlayerChunkZ = null;
 
-        function respawnPlayer() {
-            camera.position.set(0, 12, 0);
-            playerHealth = 100;
-            updateHealthUI();
-        }
+            function updateChunks() {
+                const playerChunkX = Math.floor(camera.position.x / CHUNK_SIZE);
+                const playerChunkZ = Math.floor(camera.position.z / CHUNK_SIZE);
 
-        const inventory = {
-            1: { name: 'Pickaxe', type: 'tool' },
-            2: { name: 'Sword', type: 'tool' },
-            3: { name: 'Meat', type: 'item', count: 0 },
-            4: { name: 'Dirt', type: 'block', blockType: 2, count: 0 },
-            5: { name: 'Stone', type: 'block', blockType: 3, count: 0 },
-            6: { name: 'Iron Ore', type: 'block', blockType: 4, count: 0 },
-            7: { name: 'Diamond', type: 'block', blockType: 5, count: 0 },
-            8: { name: 'Wood', type: 'block', blockType: 6, count: 0 }
-        };
+                if (playerChunkX === lastPlayerChunkX && playerChunkZ === lastPlayerChunkZ) return;
 
-        let activeSlot = 1;
+                lastPlayerChunkX = playerChunkX;
+                lastPlayerChunkZ = playerChunkZ;
 
-        function updateHotbarUI() {
-            for (let i = 1; i <= 8; i++) {
-                const slotEl = document.getElementById(`slot-${i}`);
-                const item = inventory[i];
-                if (item.type === 'tool') {
-                    slotEl.innerHTML = `<span class="key">${i}</span>${item.name}`;
+                const neededChunks = new Set();
+
+                for (let cx = playerChunkX - RENDER_DISTANCE; cx <= playerChunkX + RENDER_DISTANCE; cx++) {
+                    for (let cz = playerChunkZ - RENDER_DISTANCE; cz <= playerChunkZ + RENDER_DISTANCE; cz++) {
+                        const cKey = getChunkKey(cx, cz);
+                        neededChunks.add(cKey);
+                        generateChunk(cx, cz);
+                    }
+                }
+
+                for (let loadedKey of loadedChunks.keys()) {
+                    if (!neededChunks.has(loadedKey)) {
+                        unloadChunk(loadedKey);
+                    }
+                }
+            }
+
+            // --- 7. Entities & Meat Drops ---
+            const droppedItems = [];
+            function dropMeatItem(x, y, z) {
+                const meatMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.25, 0.3), materials.meat);
+                meatMesh.position.set(x, y + 0.2, z);
+                scene.add(meatMesh);
+                droppedItems.push({ mesh: meatMesh, timer: 0 });
+            }
+
+            const pigs = [];
+            function createPig(x, z) {
+                const pig = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.2), materials.pig);
+                body.position.y = 0.5;
+                pig.add(body);
+
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), materials.pig);
+                head.position.set(0, 0.8, 0.7);
+                pig.add(head);
+
+                const legGeo = new THREE.BoxGeometry(0.25, 0.4, 0.25);
+                const legs = [];
+                [[-0.25, 0.2, 0.35], [0.25, 0.2, 0.35], [-0.25, 0.2, -0.35], [0.25, 0.2, -0.35]].forEach(p => {
+                    const leg = new THREE.Mesh(legGeo, materials.pig);
+                    leg.position.set(...p);
+                    pig.add(leg);
+                    legs.push(leg);
+                });
+
+                const initialY = getTerrainHeight(x, z) + 0.5;
+                pig.position.set(x, initialY, z);
+                scene.add(pig);
+
+                pigs.push({
+                    group: pig, bodyMesh: body, headMesh: head, legs: legs,
+                    timer: 0, dir: new THREE.Vector3(1, 0, 0), hp: 3, hurtTimer: 0
+                });
+            }
+
+            // --- 8. Controls & Pause System ---
+            const instructions = document.getElementById('instructions');
+            const menuTitle = document.getElementById('menu-title');
+            const startBtn = document.querySelector('.start-btn');
+            let gameActive = false;
+
+            function pauseGame() {
+                gameActive = false;
+                instructions.style.display = 'flex';
+                instructions.style.opacity = '1';
+                menuTitle.innerText = "GAME PAUSED";
+                startBtn.innerText = "RESUME GAME";
+            }
+
+            function resumeGame() {
+                gameActive = true;
+                instructions.style.opacity = '0';
+                setTimeout(() => { instructions.style.display = 'none'; }, 300);
+                try {
+                    document.body.requestPointerLock();
+                } catch(e) {}
+            }
+
+            instructions.addEventListener('click', resumeGame);
+
+            document.addEventListener('pointerlockchange', () => {
+                if (document.pointerLockElement !== document.body && gameActive) {
+                    pauseGame();
+                }
+            });
+
+            let pitch = 0, yaw = 0;
+            document.addEventListener('mousemove', (e) => {
+                if (!gameActive) return;
+
+                yaw -= (e.movementX || 0) * 0.0025;
+                pitch -= (e.movementY || 0) * 0.0025;
+                pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, pitch));
+                camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+            });
+
+            const keys = {};
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Escape' && gameActive) {
+                    document.exitPointerLock();
+                    pauseGame();
+                }
+                keys[e.code] = true;
+            });
+            document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+            camera.position.set(0, 10, 5);
+            updateChunks();
+
+            // --- 9. Physics Engine & Collisions ---
+            let velocityY = 0;
+            let isGrounded = false;
+
+            function checkPlayerCollision() {
+                const pX = camera.position.x;
+                const pY = camera.position.y;
+                const pZ = camera.position.z;
+
+                const radius = 0.3;
+                const feetY = pY - 1.5;
+                const headY = pY + 0.2;
+
+                for (let x = pX - radius; x <= pX + radius; x += radius * 2) {
+                    for (let z = pZ - radius; z <= pZ + radius; z += radius * 2) {
+                        for (let y = feetY; y <= headY; y += 0.8) {
+                            const bx = Math.round(x);
+                            const by = Math.round(y);
+                            const bz = Math.round(z);
+                            if (blocks.has(getBlockKey(bx, by, bz))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            function movePlayer(dx, dy, dz) {
+                camera.position.x += dx;
+                if (checkPlayerCollision()) camera.position.x -= dx;
+
+                camera.position.z += dz;
+                if (checkPlayerCollision()) camera.position.z -= dz;
+
+                camera.position.y += dy;
+                if (checkPlayerCollision()) {
+                    camera.position.y -= dy;
+                    if (dy < 0) {
+                        if (velocityY < -0.35) {
+                            takeDamage(Math.floor(Math.abs(velocityY) * 120));
+                        }
+                        isGrounded = true;
+                        velocityY = 0;
+                    } else if (dy > 0) {
+                        velocityY = 0;
+                    }
                 } else {
-                    slotEl.innerHTML = `<span class="key">${i}</span>${item.name}<br>(${item.count})`;
+                    if (dy < 0) isGrounded = false;
                 }
-                slotEl.classList.toggle('active', i === activeSlot);
             }
+
+            // --- 10. Player Interactions ---
+            const raycaster = new THREE.Raycaster();
+            document.addEventListener('mousedown', (e) => {
+                if (!gameActive) return;
+
+                triggerSwing();
+
+                if (e.button === 0) {
+                    raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+                    const pigMeshes = [];
+                    pigs.forEach(p => pigMeshes.push(p.bodyMesh, p.headMesh));
+                    const allTargets = [...Array.from(blocks.values()), ...pigMeshes];
+                    const intersects = raycaster.intersectObjects(allTargets);
+
+                    if (intersects.length > 0 && intersects[0].distance < 5) {
+                        const hit = intersects[0].object;
+                        const hitPig = pigs.find(p => p.bodyMesh === hit || p.headMesh === hit);
+
+                        if (hitPig) {
+                            const damage = (activeSlot === 2) ? 3 : 1;
+                            hitPig.hp -= damage;
+                            hitPig.hurtTimer = 10;
+                            hitPig.bodyMesh.material = materials.pigHurt;
+                            hitPig.headMesh.material = materials.pigHurt;
+
+                            const knockback = camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(0.5);
+                            hitPig.group.position.add(knockback);
+
+                            if (hitPig.hp <= 0) {
+                                const meatCountDrop = Math.floor(Math.random() * 2) + 1;
+                                for (let m = 0; m < meatCountDrop; m++) {
+                                    dropMeatItem(
+                                        hitPig.group.position.x + (Math.random() - 0.5) * 0.4,
+                                        hitPig.group.position.y,
+                                        hitPig.group.position.z + (Math.random() - 0.5) * 0.4
+                                    );
+                                }
+                                scene.remove(hitPig.group);
+                                pigs.splice(pigs.indexOf(hitPig), 1);
+                            }
+                            return;
+                        }
+
+                        const bKey = getBlockKey(hit.userData.x, hit.userData.y, hit.userData.z);
+                        if (blocks.has(bKey)) {
+                            const blockType = hit.userData.type;
+                            if (blockType === 8) return;
+
+                            for (let slotIdx in inventory) {
+                                if (inventory[slotIdx].type === 'block' && inventory[slotIdx].blockType === blockType) {
+                                    inventory[slotIdx].count++;
+                                    break;
+                                }
+                            }
+                            scene.remove(hit);
+                            blocks.delete(bKey);
+                            updateHotbarUI();
+                        }
+                    }
+                } else if (e.button === 2) {
+                    const item = inventory[activeSlot];
+
+                    if (activeSlot === 3) {
+                        if (item.count > 0 && playerHealth < maxHealth) {
+                            item.count--;
+                            healPlayer(25);
+                            updateHotbarUI();
+                            updateHeldItemVisibility();
+                        }
+                        return;
+                    }
+
+                    if (item.type === 'block' && item.count > 0) {
+                        raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+                        const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
+
+                        if (intersects.length > 0 && intersects[0].distance < 6) {
+                            const hit = intersects[0];
+                            const target = hit.object;
+                            const normal = hit.face.normal;
+                            const px = target.userData.x + normal.x;
+                            const py = target.userData.y + normal.y;
+                            const pz = target.userData.z + normal.z;
+
+                            createBlock(px, py, pz, item.blockType, target.userData.chunkKey);
+                            item.count--;
+                            updateHotbarUI();
+                        }
+                    }
+                }
+            });
+
+            document.addEventListener('contextmenu', e => e.preventDefault());
+
+            // --- 11. Main Loop ---
+            let walkTimer = 0;
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                if (gameActive) {
+                    const speed = 0.12;
+                    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); forward.y = 0; forward.normalize();
+                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); right.y = 0; right.normalize();
+
+                    let moveX = 0;
+                    let moveZ = 0;
+
+                    if (keys['KeyW']) { moveX += forward.x * speed; moveZ += forward.z * speed; }
+                    if (keys['KeyS']) { moveX -= forward.x * speed; moveZ -= forward.z * speed; }
+                    if (keys['KeyA']) { moveX -= right.x * speed; moveZ -= right.z * speed; }
+                    if (keys['KeyD']) { moveX += right.x * speed; moveZ += right.z * speed; }
+
+                    if (keys['Space'] && isGrounded) {
+                        velocityY = 0.18;
+                        isGrounded = false;
+                    }
+
+                    velocityY -= 0.01;
+                    movePlayer(moveX, velocityY, moveZ);
+                    updateChunks();
+                }
+
+                if (isSwinging) {
+                    swingProgress += 0.2;
+                    pickaxeGroup.rotation.x = 0.2 - Math.sin(swingProgress) * 1.2;
+                    swordGroup.rotation.x = 0.2 - Math.sin(swingProgress) * 1.2;
+                    heldMeatGroup.rotation.x = -Math.sin(swingProgress) * 0.8;
+                    if (swingProgress >= Math.PI) {
+                        isSwinging = false;
+                        pickaxeGroup.rotation.x = 0.2;
+                        swordGroup.rotation.x = 0.2;
+                        heldMeatGroup.rotation.x = 0;
+                    }
+                }
+
+                for (let i = droppedItems.length - 1; i >= 0; i--) {
+                    const item = droppedItems[i];
+                    item.timer += 0.05;
+                    item.mesh.rotation.y += 0.03;
+                    item.mesh.position.y += Math.sin(item.timer) * 0.002;
+
+                    if (camera.position.distanceTo(item.mesh.position) < 1.8) {
+                        scene.remove(item.mesh);
+                        droppedItems.splice(i, 1);
+                        inventory[3].count++;
+                        updateHotbarUI();
+                        updateHeldItemVisibility();
+                    }
+                }
+
+                walkTimer += 0.08;
+                pigs.forEach(p => {
+                    if (p.hurtTimer > 0) {
+                        p.hurtTimer--;
+                        if (p.hurtTimer === 0) {
+                            p.bodyMesh.material = materials.pig;
+                            p.headMesh.material = materials.pig;
+                        }
+                    }
+
+                    p.timer++;
+                    if (p.timer > 100) {
+                        p.dir.set((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2).normalize();
+                        p.timer = 0;
+                    }
+                    p.group.position.addScaledVector(p.dir, 0.01);
+                    p.group.rotation.y = Math.atan2(p.dir.x, p.dir.z);
+
+                    const px = Math.round(p.group.position.x);
+                    const pz = Math.round(p.group.position.z);
+                    let highestY = getTerrainHeight(px, pz);
+                    for (let y = highestY + 5; y >= highestY; y--) {
+                        if (blocks.has(getBlockKey(px, y, pz))) {
+                            highestY = y;
+                            break;
+                        }
+                    }
+                    p.group.position.y = highestY + 0.5;
+
+                    p.legs[0].rotation.x = Math.sin(walkTimer) * 0.5;
+                    p.legs[1].rotation.x = -Math.sin(walkTimer) * 0.5;
+                    p.legs[2].rotation.x = -Math.sin(walkTimer) * 0.5;
+                    p.legs[3].rotation.x = Math.sin(walkTimer) * 0.5;
+                });
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
         }
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key >= '1' && e.key <= '8') {
-                activeSlot = parseInt(e.key);
-                updateHotbarUI();
-                updateHeldItemVisibility();
-            }
-        });
-
-        // --- 4. Scene Setup ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x7ec0ee);
-        scene.fog = new THREE.FogExp2(0x7ec0ee, 0.025);
-
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        scene.add(camera);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: false });
+    </script>
+</body>
+</html>
