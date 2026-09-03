@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Voxel Survival Sandbox - Advanced World</title>
+    <title>3D Voxel Survival Sandbox - Day/Night & Villages</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; background: #000; color: #fff; }
@@ -47,6 +47,13 @@
             transition: width 0.2s ease-out;
         }
 
+        #loot-notification {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85); color: #2ecc71; border: 2px solid #2ecc71;
+            padding: 10px 20px; border-radius: 8px; font-family: monospace; font-weight: bold;
+            display: none; z-index: 15; text-align: center;
+        }
+
         #hotbar {
             position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 4px; background: rgba(0, 0, 0, 0.7); padding: 6px;
@@ -62,7 +69,6 @@
         .slot .key { position: absolute; top: 2px; left: 4px; font-size: 8px; color: #aaa; }
         .slot.active { border-color: #2ecc71; background: rgba(46,204,113,0.25); box-shadow: 0 0 10px rgba(46,204,113,0.3); color: #fff; }
 
-        /* Crafting Interface */
         #crafting-menu {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 360px; background: rgba(20, 25, 35, 0.95); border: 2px solid #2ecc71;
@@ -84,12 +90,14 @@
 </head>
 <body>
     <div id="crosshair"></div>
+    <div id="loot-notification">Opened Village Chest!</div>
     
     <div id="instructions">
         <h1 id="menu-title">VOXEL SURVIVAL</h1>
-        <p>WASD = Move | SHIFT = Sprint | Space = Jump | E = Crafting Menu</p>
-        <p>Beware of Zombies and Bow-wielding Skeletons in Caves!</p>
-        <p>Left Click = Mine / Attack | Right Click = Place Block / Shoot Bow / Eat</p>
+        <p>WASD = Move | SHIFT = Sprint | Space = Jump | E = Crafting</p>
+        <p>Monsters spawn ONLY at NIGHT and burn in the sun!</p>
+        <p>Find Village Chests for free loot! Right Click Chests to open.</p>
+        <p>Left Click = Mine / Attack | Right Click = Place / Shoot / Open Chest</p>
         <button class="start-btn">CLICK TO PLAY</button>
     </div>
 
@@ -108,7 +116,7 @@
         <div class="slot" id="slot-6"><span class="key">6</span>Wood (0)</div>
         <div class="slot" id="slot-7"><span class="key">7</span>Planks (0)</div>
         <div class="slot" id="slot-8"><span class="key">8</span>Craft Table</div>
-        <div class="slot" id="slot-9"><span class="key">9</span>Cobble (0)</div>
+        <div class="slot" id="slot-9"><span class="key">9</span>Stone (0)</div>
     </div>
 
     <div id="crafting-menu">
@@ -183,6 +191,13 @@
                     ctx.fillRect(2, 2, 12, 12);
                     ctx.fillStyle = '#444';
                     ctx.fillRect(4, 4, 3, 3); ctx.fillRect(9, 9, 3, 3);
+                } else if (pattern === 'chest') {
+                    ctx.fillStyle = '#3a2412';
+                    ctx.fillRect(0, 0, 16, 16);
+                    ctx.fillStyle = '#b58b4c';
+                    ctx.fillRect(1, 1, 14, 14);
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(7, 6, 2, 4);
                 } else if (pattern === 'iron') {
                     ctx.fillStyle = '#d89c5c';
                     for (let i = 0; i < 8; i++) ctx.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 14), 2, 2);
@@ -205,6 +220,7 @@
                 woodTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#7a5c3e') }),
                 planks: new THREE.MeshLambertMaterial({ map: createPixelTexture('#9c7349') }),
                 craftTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#9c7349', 15, 'craft_top') }),
+                chestMat: new THREE.MeshLambertMaterial({ map: createPixelTexture('#805229', 20, 'chest') }),
                 leaves: new THREE.MeshLambertMaterial({ map: createPixelTexture('#2d6e1a'), transparent: true, opacity: 0.9 }),
                 ironOre: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373', 25, 'iron') }),
                 bedrock: new THREE.MeshLambertMaterial({ map: createPixelTexture('#222222', 40) }),
@@ -227,7 +243,8 @@
                 7: materials.planks,
                 8: [materials.planks, materials.planks, materials.craftTop, materials.planks, materials.planks, materials.planks],
                 9: materials.ironOre,
-                10: materials.bedrock
+                10: materials.bedrock,
+                11: materials.chestMat
             };
 
             // --- 3. Inventory & Player State ---
@@ -299,10 +316,19 @@
                 }
             });
 
-            // --- 4. Scene & Camera Setup ---
+            function showLootNotification(text) {
+                const lootEl = document.getElementById('loot-notification');
+                lootEl.innerText = text;
+                lootEl.style.display = 'block';
+                setTimeout(() => { lootEl.style.display = 'none'; }, 2500);
+            }
+
+            // --- 4. Scene & Day/Night System ---
             const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x6eb1e8);
-            scene.fog = new THREE.FogExp2(0x6eb1e8, 0.025);
+            const dayColor = new THREE.Color(0x6eb1e8);
+            const nightColor = new THREE.Color(0x050814);
+            scene.background = dayColor.clone();
+            scene.fog = new THREE.FogExp2(dayColor.clone(), 0.025);
 
             const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             scene.add(camera);
@@ -312,12 +338,33 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             document.body.appendChild(renderer.domElement);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffdd, 0.7);
             dirLight.position.set(30, 50, 20);
             scene.add(dirLight);
 
-            // --- 5. First-Person Items ---
+            let dayTime = 0; // Cycle counter
+            let isNight = false;
+
+            function updateDayNightCycle() {
+                dayTime += 0.0004; // Cycle speed
+                const cycle = (Math.sin(dayTime) + 1) / 2; // 0 to 1
+
+                isNight = cycle < 0.35;
+
+                const currentSky = new THREE.Color().lerpColors(nightColor, dayColor, cycle);
+                scene.background = currentSky;
+                scene.fog.color = currentSky;
+
+                ambientLight.intensity = Math.max(0.12, cycle * 0.65);
+                dirLight.intensity = Math.max(0.05, cycle * 0.7);
+
+                dirLight.position.x = Math.cos(dayTime) * 80;
+                dirLight.position.y = Math.sin(dayTime) * 80;
+            }
+
+            // --- 5. First-Person View Models ---
             const pickaxeGroup = new THREE.Group();
             const pickHandle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), materials.woodHandle);
             pickHandle.position.set(0, 0.2, 0);
@@ -395,6 +442,8 @@
                         }
                     }
                 }
+                // Place Village Chest inside the structure
+                createBlock(x, surfaceY + 1, z + 1, 11, chunkKey);
             }
 
             function generateChunk(cx, cz) {
@@ -433,13 +482,13 @@
                     }
                 }
 
-                // Spawning village or mobs
+                // Spawning villages or night monsters
                 if (cx % 3 === 0 && cz % 3 === 0 && cx !== 0) {
                     const h = getTerrainHeight(startX + 5, startZ + 5);
                     if (h > SEA_LEVEL) buildVillage(startX + 5, h, startZ + 5, chunkKey);
-                } else {
-                    if (Math.random() < 0.3) spawnMob('zombie', startX + 5, startZ + 5);
-                    if (Math.random() < 0.2) spawnMob('skeleton', startX + 2, startZ + 2);
+                } else if (isNight) {
+                    if (Math.random() < 0.35) spawnMob('zombie', startX + 5, startZ + 5);
+                    if (Math.random() < 0.25) spawnMob('skeleton', startX + 2, startZ + 2);
                 }
 
                 loadedChunks.set(chunkKey, chunkBlocks);
@@ -561,7 +610,7 @@
                         const bKey = getBlockKey(hit.userData.x, hit.userData.y, hit.userData.z);
                         if (blocks.has(bKey)) {
                             const bType = hit.userData.type;
-                            if (bType === 10 || bType === 4) return; // Water/Bedrock unbreakable
+                            if (bType === 10 || bType === 4) return;
                             if (bType === 5) inventory[6].count++;
                             else if (bType === 3) inventory[9].count++;
                             scene.remove(hit);
@@ -570,6 +619,27 @@
                         }
                     }
                 } else if (e.button === 2) { // Right Click
+                    raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+                    const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
+
+                    if (intersects.length > 0 && intersects[0].distance < 5) {
+                        const hit = intersects[0].object;
+                        
+                        // Chest interaction
+                        if (hit.userData.type === 11) {
+                            const lootArrows = Math.floor(Math.random() * 8) + 5;
+                            const lootMeat = Math.floor(Math.random() * 3) + 1;
+                            inventory[4].count += lootArrows;
+                            inventory[5].count += lootMeat;
+                            showLootNotification(`Found +${lootArrows} Arrows & +${lootMeat} Meat!`);
+                            
+                            scene.remove(hit);
+                            blocks.delete(getBlockKey(hit.userData.x, hit.userData.y, hit.userData.z));
+                            updateHotbarUI();
+                            return;
+                        }
+                    }
+
                     if (activeSlot === 3 && inventory[3].has && inventory[4].count > 0) {
                         inventory[4].count--;
                         updateHotbarUI();
@@ -577,8 +647,6 @@
                     } else {
                         const item = inventory[activeSlot];
                         if (item.type === 'block' && item.count > 0) {
-                            raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-                            const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
                             if (intersects.length > 0 && intersects[0].distance < 5) {
                                 const hit = intersects[0];
                                 const n = hit.face.normal;
@@ -603,6 +671,8 @@
                 requestAnimationFrame(animate);
 
                 if (gameActive && !isCraftingOpen) {
+                    updateDayNightCycle();
+
                     const speed = (keys['ShiftLeft'] || keys['ShiftRight']) ? 0.2 : 0.11;
                     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); forward.y = 0; forward.normalize();
                     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); right.y = 0; right.normalize();
@@ -627,7 +697,7 @@
                     updateChunks();
                 }
 
-                // Arrow Movement & Collisions
+                // Arrow Movement
                 for (let i = arrows.length - 1; i >= 0; i--) {
                     const arr = arrows[i];
                     arr.mesh.position.addScaledVector(arr.dir, 0.4);
@@ -642,10 +712,19 @@
                     if (arr.life <= 0) { scene.remove(arr.mesh); arrows.splice(i, 1); }
                 }
 
-                // Mob AI Logic
-                mobs.forEach(m => {
+                // Mob AI & Daylight Burning
+                for (let i = mobs.length - 1; i >= 0; i--) {
+                    const m = mobs[i];
+
+                    // Monsters burn/despawn during daylight
+                    if (!isNight) {
+                        scene.remove(m.group);
+                        mobs.splice(i, 1);
+                        continue;
+                    }
+
                     const dist = m.group.position.distanceTo(camera.position);
-                    if (dist < 12) {
+                    if (dist < 14) {
                         m.group.lookAt(camera.position.x, m.group.position.y, camera.position.z);
                         if (m.type === 'zombie') {
                             m.group.translateZ(0.03);
@@ -659,7 +738,7 @@
                             }
                         }
                     }
-                });
+                }
 
                 renderer.render(scene, camera);
             }
