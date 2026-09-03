@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Voxel Survival Sandbox - Deep Oceans & Underground</title>
+    <title>3D Voxel Survival Sandbox - Trees & Forests</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; background: #000; color: #fff; }
@@ -95,8 +95,8 @@
     <div id="instructions">
         <h1 id="menu-title">VOXEL SURVIVAL</h1>
         <p>WASD = Move | SHIFT = Sprint | Space = Jump | E = Crafting</p>
-        <p>Dig deep underground into caves or explore deep oceans with fish!</p>
-        <p>Monsters spawn ONLY at NIGHT and burn in sunlight.</p>
+        <p>Mine tree wood to craft planks, tools, and crafting tables!</p>
+        <p>Explore deep oceans with fish or dig deep underground caves.</p>
         <p>Left Click = Mine / Attack | Right Click = Place / Open Chest</p>
         <button class="start-btn">CLICK TO PLAY</button>
     </div>
@@ -394,19 +394,18 @@
             let isSwinging = false, swingProgress = 0;
             function triggerSwing() { if (!isSwinging) { isSwinging = true; swingProgress = 0; } }
 
-            // --- 6. World Engine (Deep Ocean & Caves) ---
+            // --- 6. World Engine (Trees, Deep Ocean & Caves) ---
             const geometry = new THREE.BoxGeometry(1, 1, 1);
             const blocks = new Map();
             const loadedChunks = new Map();
             const CHUNK_SIZE = 10;
             const RENDER_DISTANCE = 2;
-            const SEA_LEVEL = 3; // Raised sea level for deeper oceans
-            const MIN_Y = -20;   // Deeper underground limits
+            const SEA_LEVEL = 3;
+            const MIN_Y = -20;
 
             function getBlockKey(x, y, z) { return `${x},${y},${z}`; }
             function getChunkKey(cx, cz) { return `${cx},${cz}`; }
 
-            // Terrain generator with deeper ocean basins
             function getTerrainHeight(x, z) {
                 const terrain = Math.sin(x * 0.08) * Math.cos(z * 0.08) * 7 + Math.sin((x + z) * 0.04) * 4;
                 return Math.floor(terrain);
@@ -426,6 +425,32 @@
                 scene.add(mesh);
                 blocks.set(getBlockKey(x, y, z), mesh);
                 return mesh;
+            }
+
+            function buildTree(x, surfaceY, z, chunkKey) {
+                const trunkHeight = 4 + Math.floor(Math.random() * 2);
+                
+                // Spawn Wood Trunk
+                for (let y = 1; y <= trunkHeight; y++) {
+                    createBlock(x, surfaceY + y, z, 5, chunkKey);
+                }
+
+                // Spawn Leaf Canopy
+                const leafStart = surfaceY + trunkHeight - 1;
+                for (let lx = -2; lx <= 2; lx++) {
+                    for (let lz = -2; lz <= 2; lz++) {
+                        for (let ly = 0; ly <= 2; ly++) {
+                            if (Math.abs(lx) === 2 && Math.abs(lz) === 2) continue; // Round the corners
+                            const px = x + lx;
+                            const py = leafStart + ly;
+                            const pz = z + lz;
+                            const bKey = getBlockKey(px, py, pz);
+                            if (!blocks.has(bKey)) {
+                                createBlock(px, py, pz, 6, chunkKey);
+                            }
+                        }
+                    }
+                }
             }
 
             function buildVillage(x, surfaceY, z, chunkKey) {
@@ -461,31 +486,35 @@
 
                             let bMesh = null;
                             if (y === MIN_Y) {
-                                bMesh = createBlock(x, y, z, 10, chunkKey); // Bedrock bottom
+                                bMesh = createBlock(x, y, z, 10, chunkKey);
                             } else if (y === height) {
                                 if (height <= SEA_LEVEL) {
-                                    bMesh = createBlock(x, y, z, 2, chunkKey); // Underwater Dirt/Sand
+                                    bMesh = createBlock(x, y, z, 2, chunkKey);
                                 } else {
-                                    bMesh = createBlock(x, y, z, 1, chunkKey); // Grass
+                                    bMesh = createBlock(x, y, z, 1, chunkKey);
                                 }
                             } else if (y > height && y <= SEA_LEVEL) {
-                                bMesh = createBlock(x, y, z, 4, chunkKey); // Water
+                                bMesh = createBlock(x, y, z, 4, chunkKey);
                             } else if (y > height - 3) {
-                                bMesh = createBlock(x, y, z, 2, chunkKey); // Dirt
+                                bMesh = createBlock(x, y, z, 2, chunkKey);
                             } else {
-                                bMesh = createBlock(x, y, z, (Math.random() < 0.08 ? 9 : 3), chunkKey); // Stone/Iron
+                                bMesh = createBlock(x, y, z, (Math.random() < 0.08 ? 9 : 3), chunkKey);
                             }
                             if (bMesh) chunkBlocks.push(bMesh);
+                        }
+
+                        // Trees spawn on grass land
+                        if (height > SEA_LEVEL + 1 && Math.random() < 0.035) {
+                            buildTree(x, height, z, chunkKey);
                         }
                     }
                 }
 
-                // Spawn Villages on high ground or Fish in ocean waters
+                // Spawn Villages on flat high ground or Fish in oceans
                 const midH = getTerrainHeight(startX + 5, startZ + 5);
                 if (midH > SEA_LEVEL + 1) {
                     if (cx % 3 === 0 && cz % 3 === 0 && cx !== 0) buildVillage(startX + 5, midH, startZ + 5, chunkKey);
                 } else if (midH < SEA_LEVEL - 2) {
-                    // Ocean area: spawn fish
                     if (Math.random() < 0.6) spawnFish(startX + 5, SEA_LEVEL - 1, startZ + 5);
                 }
 
@@ -523,7 +552,6 @@
                 for (let key of loadedChunks.keys()) if (!needed.has(key)) unloadChunk(key);
             }
 
-            // Real dynamic collision detection for digging underground
             function getSolidHeightBelow(x, z, startY) {
                 const rx = Math.round(x);
                 const rz = Math.round(z);
@@ -531,7 +559,7 @@
                     const bKey = getBlockKey(rx, y, rz);
                     if (blocks.has(bKey)) {
                         const type = blocks.get(bKey).userData.type;
-                        if (type !== 4) { // Ignore liquid water
+                        if (type !== 4 && type !== 6) { // Ignore water and leaves for standing floor
                             return y;
                         }
                     }
@@ -641,9 +669,9 @@
                         const bKey = getBlockKey(hit.userData.x, hit.userData.y, hit.userData.z);
                         if (blocks.has(bKey)) {
                             const bType = hit.userData.type;
-                            if (bType === 10 || bType === 4) return; // Cannot destroy bedrock or water directly
-                            if (bType === 5) inventory[6].count++;
-                            else if (bType === 3) inventory[9].count++;
+                            if (bType === 10 || bType === 4) return;
+                            if (bType === 5) inventory[6].count++; // Harvest Wood
+                            else if (bType === 3) inventory[9].count++; // Harvest Stone
                             scene.remove(hit);
                             blocks.delete(bKey);
                             updateHotbarUI();
@@ -717,7 +745,6 @@
                     velocityY -= 0.009;
                     camera.position.x += moveX; camera.position.z += moveZ; camera.position.y += velocityY;
 
-                    // Dynamic voxel floor check (allows digging deep underground)
                     const floorY = getSolidHeightBelow(camera.position.x, camera.position.z, camera.position.y - 0.5);
                     if (camera.position.y < floorY + 1.5) {
                         camera.position.y = floorY + 1.5;
@@ -727,7 +754,7 @@
                     updateChunks();
                 }
 
-                // Fish Swimming Physics
+                // Fish Swimming Animation
                 fishList.forEach(f => {
                     f.timer += 0.03;
                     f.group.position.x += Math.cos(f.timer) * 0.02;
