@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Voxel Survival Sandbox - Day/Night & Villages</title>
+    <title>3D Voxel Survival Sandbox - Deep Oceans & Underground</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; background: #000; color: #fff; }
@@ -95,9 +95,9 @@
     <div id="instructions">
         <h1 id="menu-title">VOXEL SURVIVAL</h1>
         <p>WASD = Move | SHIFT = Sprint | Space = Jump | E = Crafting</p>
-        <p>Monsters spawn ONLY at NIGHT and burn in the sun!</p>
-        <p>Find Village Chests for free loot! Right Click Chests to open.</p>
-        <p>Left Click = Mine / Attack | Right Click = Place / Shoot / Open Chest</p>
+        <p>Dig deep underground into caves or explore deep oceans with fish!</p>
+        <p>Monsters spawn ONLY at NIGHT and burn in sunlight.</p>
+        <p>Left Click = Mine / Attack | Right Click = Place / Open Chest</p>
         <button class="start-btn">CLICK TO PLAY</button>
     </div>
 
@@ -215,7 +215,7 @@
                 grassSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33', 25, 'grass_side') }),
                 dirt: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33') }),
                 stone: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373') }),
-                water: new THREE.MeshLambertMaterial({ color: 0x3377cc, transparent: true, opacity: 0.65 }),
+                water: new THREE.MeshLambertMaterial({ color: 0x1f5fad, transparent: true, opacity: 0.6 }),
                 woodSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#61462b') }),
                 woodTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#7a5c3e') }),
                 planks: new THREE.MeshLambertMaterial({ map: createPixelTexture('#9c7349') }),
@@ -226,11 +226,9 @@
                 bedrock: new THREE.MeshLambertMaterial({ map: createPixelTexture('#222222', 40) }),
                 zombie: new THREE.MeshLambertMaterial({ map: createPixelTexture('#2e7d32') }),
                 skeleton: new THREE.MeshLambertMaterial({ map: createPixelTexture('#cccccc') }),
-                pig: new THREE.MeshLambertMaterial({ map: createPixelTexture('#f0938d') }),
-                mobHurt: new THREE.MeshLambertMaterial({ color: 0xff3333 }),
+                fishMat: new THREE.MeshLambertMaterial({ color: 0xff6600 }),
                 iron: new THREE.MeshLambertMaterial({ color: 0xd8d8d8 }),
-                woodHandle: new THREE.MeshLambertMaterial({ color: 0x5c4028 }),
-                meat: new THREE.MeshLambertMaterial({ map: createPixelTexture('#c24236') })
+                woodHandle: new THREE.MeshLambertMaterial({ color: 0x5c4028 })
             };
 
             const blockMaterials = {
@@ -259,7 +257,7 @@
                 playerHealth -= amount;
                 if (playerHealth <= 0) {
                     playerHealth = 100;
-                    camera.position.set(0, 12, 0);
+                    camera.position.set(0, 15, 0);
                 }
                 updateHealthUI();
             }
@@ -323,7 +321,7 @@
                 setTimeout(() => { lootEl.style.display = 'none'; }, 2500);
             }
 
-            // --- 4. Scene & Day/Night System ---
+            // --- 4. Scene & Lighting ---
             const scene = new THREE.Scene();
             const dayColor = new THREE.Color(0x6eb1e8);
             const nightColor = new THREE.Color(0x050814);
@@ -344,27 +342,25 @@
             dirLight.position.set(30, 50, 20);
             scene.add(dirLight);
 
-            let dayTime = 0; // Cycle counter
+            let dayTime = 0;
             let isNight = false;
 
             function updateDayNightCycle() {
-                dayTime += 0.0004; // Cycle speed
-                const cycle = (Math.sin(dayTime) + 1) / 2; // 0 to 1
-
+                dayTime += 0.0003;
+                const cycle = (Math.sin(dayTime) + 1) / 2;
                 isNight = cycle < 0.35;
 
                 const currentSky = new THREE.Color().lerpColors(nightColor, dayColor, cycle);
                 scene.background = currentSky;
                 scene.fog.color = currentSky;
 
-                ambientLight.intensity = Math.max(0.12, cycle * 0.65);
+                ambientLight.intensity = Math.max(0.15, cycle * 0.65);
                 dirLight.intensity = Math.max(0.05, cycle * 0.7);
-
                 dirLight.position.x = Math.cos(dayTime) * 80;
                 dirLight.position.y = Math.sin(dayTime) * 80;
             }
 
-            // --- 5. First-Person View Models ---
+            // --- 5. Held Items ---
             const pickaxeGroup = new THREE.Group();
             const pickHandle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), materials.woodHandle);
             pickHandle.position.set(0, 0.2, 0);
@@ -398,25 +394,28 @@
             let isSwinging = false, swingProgress = 0;
             function triggerSwing() { if (!isSwinging) { isSwinging = true; swingProgress = 0; } }
 
-            // --- 6. World Generation Engine ---
+            // --- 6. World Engine (Deep Ocean & Caves) ---
             const geometry = new THREE.BoxGeometry(1, 1, 1);
             const blocks = new Map();
             const loadedChunks = new Map();
             const CHUNK_SIZE = 10;
             const RENDER_DISTANCE = 2;
-            const SEA_LEVEL = 1;
+            const SEA_LEVEL = 3; // Raised sea level for deeper oceans
+            const MIN_Y = -20;   // Deeper underground limits
 
             function getBlockKey(x, y, z) { return `${x},${y},${z}`; }
             function getChunkKey(cx, cz) { return `${cx},${cz}`; }
 
+            // Terrain generator with deeper ocean basins
             function getTerrainHeight(x, z) {
-                return Math.floor(Math.sin(x * 0.12) * Math.cos(z * 0.12) * 3 + Math.sin((x + z) * 0.05) * 2) + 3;
+                const terrain = Math.sin(x * 0.08) * Math.cos(z * 0.08) * 7 + Math.sin((x + z) * 0.04) * 4;
+                return Math.floor(terrain);
             }
 
             function isCave(x, y, z) {
                 if (y >= getTerrainHeight(x, z) - 1) return false;
-                const caveVal = Math.sin(x * 0.3) + Math.cos(y * 0.4) + Math.sin(z * 0.3);
-                return caveVal > 1.3;
+                const caveVal = Math.sin(x * 0.25) + Math.cos(y * 0.3) + Math.sin(z * 0.25);
+                return caveVal > 1.25;
             }
 
             function createBlock(x, y, z, type, chunkKey) {
@@ -442,7 +441,6 @@
                         }
                     }
                 }
-                // Place Village Chest inside the structure
                 createBlock(x, surfaceY + 1, z + 1, 11, chunkKey);
             }
 
@@ -458,37 +456,42 @@
                     for (let z = startZ; z < startZ + CHUNK_SIZE; z++) {
                         const height = getTerrainHeight(x, z);
 
-                        for (let y = -8; y <= Math.max(height, SEA_LEVEL); y++) {
+                        for (let y = MIN_Y; y <= Math.max(height, SEA_LEVEL); y++) {
                             if (y < height && isCave(x, y, z)) continue;
 
                             let bMesh = null;
-                            if (y === -8) {
-                                bMesh = createBlock(x, y, z, 10, chunkKey);
+                            if (y === MIN_Y) {
+                                bMesh = createBlock(x, y, z, 10, chunkKey); // Bedrock bottom
                             } else if (y === height) {
                                 if (height <= SEA_LEVEL) {
-                                    bMesh = createBlock(x, y, z, 2, chunkKey);
+                                    bMesh = createBlock(x, y, z, 2, chunkKey); // Underwater Dirt/Sand
                                 } else {
-                                    bMesh = createBlock(x, y, z, 1, chunkKey);
+                                    bMesh = createBlock(x, y, z, 1, chunkKey); // Grass
                                 }
                             } else if (y > height && y <= SEA_LEVEL) {
                                 bMesh = createBlock(x, y, z, 4, chunkKey); // Water
                             } else if (y > height - 3) {
-                                bMesh = createBlock(x, y, z, 2, chunkKey);
+                                bMesh = createBlock(x, y, z, 2, chunkKey); // Dirt
                             } else {
-                                bMesh = createBlock(x, y, z, (Math.random() < 0.1 ? 9 : 3), chunkKey);
+                                bMesh = createBlock(x, y, z, (Math.random() < 0.08 ? 9 : 3), chunkKey); // Stone/Iron
                             }
                             if (bMesh) chunkBlocks.push(bMesh);
                         }
                     }
                 }
 
-                // Spawning villages or night monsters
-                if (cx % 3 === 0 && cz % 3 === 0 && cx !== 0) {
-                    const h = getTerrainHeight(startX + 5, startZ + 5);
-                    if (h > SEA_LEVEL) buildVillage(startX + 5, h, startZ + 5, chunkKey);
-                } else if (isNight) {
-                    if (Math.random() < 0.35) spawnMob('zombie', startX + 5, startZ + 5);
-                    if (Math.random() < 0.25) spawnMob('skeleton', startX + 2, startZ + 2);
+                // Spawn Villages on high ground or Fish in ocean waters
+                const midH = getTerrainHeight(startX + 5, startZ + 5);
+                if (midH > SEA_LEVEL + 1) {
+                    if (cx % 3 === 0 && cz % 3 === 0 && cx !== 0) buildVillage(startX + 5, midH, startZ + 5, chunkKey);
+                } else if (midH < SEA_LEVEL - 2) {
+                    // Ocean area: spawn fish
+                    if (Math.random() < 0.6) spawnFish(startX + 5, SEA_LEVEL - 1, startZ + 5);
+                }
+
+                if (isNight) {
+                    if (Math.random() < 0.3) spawnMob('zombie', startX + 5, startZ + 5);
+                    if (Math.random() < 0.2) spawnMob('skeleton', startX + 2, startZ + 2);
                 }
 
                 loadedChunks.set(chunkKey, chunkBlocks);
@@ -520,9 +523,37 @@
                 for (let key of loadedChunks.keys()) if (!needed.has(key)) unloadChunk(key);
             }
 
-            // --- 7. Mobs & Projectiles Engine ---
+            // Real dynamic collision detection for digging underground
+            function getSolidHeightBelow(x, z, startY) {
+                const rx = Math.round(x);
+                const rz = Math.round(z);
+                for (let y = Math.floor(startY); y >= MIN_Y; y--) {
+                    const bKey = getBlockKey(rx, y, rz);
+                    if (blocks.has(bKey)) {
+                        const type = blocks.get(bKey).userData.type;
+                        if (type !== 4) { // Ignore liquid water
+                            return y;
+                        }
+                    }
+                }
+                return MIN_Y;
+            }
+
+            // --- 7. Mobs & Swimming Fish ---
             const mobs = [];
             const arrows = [];
+            const fishList = [];
+
+            function spawnFish(x, y, z) {
+                const fish = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.18, 0.12), materials.fishMat);
+                const tail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.05), materials.fishMat);
+                tail.position.x = -0.2;
+                fish.add(body, tail);
+                fish.position.set(x, y, z);
+                scene.add(fish);
+                fishList.push({ group: fish, timer: Math.random() * 100 });
+            }
 
             function spawnMob(type, x, z) {
                 const mob = new THREE.Group();
@@ -548,7 +579,7 @@
                 arrows.push({ mesh: arrowMesh, dir: dir.clone().normalize(), isHostile, life: 100 });
             }
 
-            // --- 8. Menu & UI Systems ---
+            // --- 8. UI & Menu Systems ---
             const instructions = document.getElementById('instructions');
             const craftingMenu = document.getElementById('crafting-menu');
             let gameActive = false, isCraftingOpen = false;
@@ -579,7 +610,7 @@
             document.addEventListener('keydown', e => keys[e.code] = true);
             document.addEventListener('keyup', e => keys[e.code] = false);
 
-            camera.position.set(0, 10, 5);
+            camera.position.set(0, 12, 5);
             updateChunks();
 
             // --- 9. Raycasting & Interaction ---
@@ -589,7 +620,7 @@
                 if (!gameActive || isCraftingOpen) return;
                 triggerSwing();
 
-                if (e.button === 0) { // Mining / Attack
+                if (e.button === 0) { // Mine / Attack
                     raycaster.setFromCamera({ x: 0, y: 0 }, camera);
                     const mobTargets = mobs.map(m => m.body);
                     const intersects = raycaster.intersectObjects([...Array.from(blocks.values()), ...mobTargets]);
@@ -610,7 +641,7 @@
                         const bKey = getBlockKey(hit.userData.x, hit.userData.y, hit.userData.z);
                         if (blocks.has(bKey)) {
                             const bType = hit.userData.type;
-                            if (bType === 10 || bType === 4) return;
+                            if (bType === 10 || bType === 4) return; // Cannot destroy bedrock or water directly
                             if (bType === 5) inventory[6].count++;
                             else if (bType === 3) inventory[9].count++;
                             scene.remove(hit);
@@ -618,14 +649,12 @@
                             updateHotbarUI();
                         }
                     }
-                } else if (e.button === 2) { // Right Click
+                } else if (e.button === 2) { // Right Click Place/Open
                     raycaster.setFromCamera({ x: 0, y: 0 }, camera);
                     const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
 
                     if (intersects.length > 0 && intersects[0].distance < 5) {
                         const hit = intersects[0].object;
-                        
-                        // Chest interaction
                         if (hit.userData.type === 11) {
                             const lootArrows = Math.floor(Math.random() * 8) + 5;
                             const lootMeat = Math.floor(Math.random() * 3) + 1;
@@ -688,14 +717,23 @@
                     velocityY -= 0.009;
                     camera.position.x += moveX; camera.position.z += moveZ; camera.position.y += velocityY;
 
-                    const curY = getTerrainHeight(Math.round(camera.position.x), Math.round(camera.position.z));
-                    if (camera.position.y < curY + 1.5) {
-                        camera.position.y = curY + 1.5;
+                    // Dynamic voxel floor check (allows digging deep underground)
+                    const floorY = getSolidHeightBelow(camera.position.x, camera.position.z, camera.position.y - 0.5);
+                    if (camera.position.y < floorY + 1.5) {
+                        camera.position.y = floorY + 1.5;
                         velocityY = 0; isGrounded = true;
                     }
 
                     updateChunks();
                 }
+
+                // Fish Swimming Physics
+                fishList.forEach(f => {
+                    f.timer += 0.03;
+                    f.group.position.x += Math.cos(f.timer) * 0.02;
+                    f.group.position.z += Math.sin(f.timer) * 0.02;
+                    f.group.rotation.y = f.timer;
+                });
 
                 // Arrow Movement
                 for (let i = arrows.length - 1; i >= 0; i--) {
@@ -712,11 +750,10 @@
                     if (arr.life <= 0) { scene.remove(arr.mesh); arrows.splice(i, 1); }
                 }
 
-                // Mob AI & Daylight Burning
+                // Mob AI & Night Burning Logic
                 for (let i = mobs.length - 1; i >= 0; i--) {
                     const m = mobs[i];
 
-                    // Monsters burn/despawn during daylight
                     if (!isNight) {
                         scene.remove(m.group);
                         mobs.splice(i, 1);
