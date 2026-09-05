@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Voxel Survival Sandbox - Trees & Forests</title>
+    <title>3D Voxel Survival - Boats, Deep Oceans & Fixed Collision</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; background: #000; color: #fff; }
@@ -47,7 +47,7 @@
             transition: width 0.2s ease-out;
         }
 
-        #loot-notification {
+        #notification {
             position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.85); color: #2ecc71; border: 2px solid #2ecc71;
             padding: 10px 20px; border-radius: 8px; font-family: monospace; font-weight: bold;
@@ -61,9 +61,9 @@
             backdrop-filter: blur(4px);
         }
         .slot {
-            width: 48px; height: 48px; border: 2px solid #555; background: rgba(255,255,255,0.05);
+            width: 52px; height: 52px; border: 2px solid #555; background: rgba(255,255,255,0.05);
             border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #ddd; font-size: 8px; font-weight: bold; position: relative; font-family: monospace;
+            color: #ddd; font-size: 9px; font-weight: bold; position: relative; font-family: monospace;
             transition: all 0.15s ease; text-align: center; padding: 2px;
         }
         .slot .key { position: absolute; top: 2px; left: 4px; font-size: 8px; color: #aaa; }
@@ -71,7 +71,7 @@
 
         #crafting-menu {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 360px; background: rgba(20, 25, 35, 0.95); border: 2px solid #2ecc71;
+            width: 380px; background: rgba(20, 25, 35, 0.96); border: 2px solid #2ecc71;
             border-radius: 10px; padding: 20px; z-index: 30; display: none;
             box-shadow: 0 0 25px rgba(0,0,0,0.8); font-family: monospace;
         }
@@ -86,18 +86,22 @@
             border-radius: 4px; cursor: pointer; font-family: monospace;
         }
         .recipe-item button:hover { background: #58d68d; }
+        .close-crafting {
+            margin-top: 15px; width: 100%; padding: 8px; background: #e74c3c; color: white;
+            border: none; border-radius: 6px; cursor: pointer; font-family: monospace; font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
-    <div id="loot-notification">Opened Village Chest!</div>
+    <div id="notification">Notification</div>
     
     <div id="instructions">
-        <h1 id="menu-title">VOXEL SURVIVAL</h1>
-        <p>WASD = Move | SHIFT = Sprint | Space = Jump | E = Crafting</p>
-        <p>Mine tree wood to craft planks, tools, and crafting tables!</p>
-        <p>Explore deep oceans with fish or dig deep underground caves.</p>
-        <p>Left Click = Mine / Attack | Right Click = Place / Open Chest</p>
+        <h1>VOXEL SURVIVAL</h1>
+        <p>WASD = Move | SHIFT = Sprint | Space = Jump | E = Open Crafting</p>
+        <p>Craft a Boat (5 Planks), place it in deep water, and Right-Click to enter/exit!</p>
+        <p>Dig deep into caves without falling through walls or solid ground.</p>
+        <p>Left Click = Mine / Attack | Right Click = Place / Interact</p>
         <button class="start-btn">CLICK TO PLAY</button>
     </div>
 
@@ -112,59 +116,60 @@
         <div class="slot" id="slot-2"><span class="key">2</span>Sword</div>
         <div class="slot" id="slot-3"><span class="key">3</span>Bow</div>
         <div class="slot" id="slot-4"><span class="key">4</span>Arrows (10)</div>
-        <div class="slot" id="slot-5"><span class="key">5</span>Meat (0)</div>
-        <div class="slot" id="slot-6"><span class="key">6</span>Wood (0)</div>
-        <div class="slot" id="slot-7"><span class="key">7</span>Planks (0)</div>
-        <div class="slot" id="slot-8"><span class="key">8</span>Craft Table</div>
+        <div class="slot" id="slot-5"><span class="key">5</span>Wood (0)</div>
+        <div class="slot" id="slot-6"><span class="key">6</span>Planks (0)</div>
+        <div class="slot" id="slot-7"><span class="key">7</span>Craft Table</div>
+        <div class="slot" id="slot-8"><span class="key">8</span>Boat (0)</div>
         <div class="slot" id="slot-9"><span class="key">9</span>Stone (0)</div>
     </div>
 
     <div id="crafting-menu">
-        <h2>CRAFTING TABLE</h2>
+        <h2>CRAFTING BENCH</h2>
         <div class="recipe-grid">
             <div class="recipe-item">
                 <span>4x Planks<br><small>(Cost: 1 Wood)</small></span>
-                <button onclick="craftItem('planks')">Craft</button>
+                <button onclick="craft('planks')">Craft</button>
             </div>
             <div class="recipe-item">
                 <span>1x Crafting Table<br><small>(Cost: 4 Planks)</small></span>
-                <button onclick="craftItem('craftTable')">Craft</button>
+                <button onclick="craft('craftTable')">Craft</button>
             </div>
             <div class="recipe-item">
-                <span>1x Sword<br><small>(Cost: 2 Iron, 1 Wood)</small></span>
-                <button onclick="craftItem('sword')">Craft</button>
+                <span>1x Boat<br><small>(Cost: 5 Planks)</small></span>
+                <button onclick="craft('boat')">Craft</button>
             </div>
             <div class="recipe-item">
-                <span>1x Bow<br><small>(Cost: 3 Wood, 2 Iron)</small></span>
-                <button onclick="craftItem('bow')">Craft</button>
+                <span>1x Sword<br><small>(Cost: 2 Wood, 2 Stone)</small></span>
+                <button onclick="craft('sword')">Craft</button>
             </div>
             <div class="recipe-item">
-                <span>5x Arrows<br><small>(Cost: 1 Iron, 1 Wood)</small></span>
-                <button onclick="craftItem('arrows')">Craft</button>
+                <span>1x Bow<br><small>(Cost: 3 Wood)</small></span>
+                <button onclick="craft('bow')">Craft</button>
+            </div>
+            <div class="recipe-item">
+                <span>5x Arrows<br><small>(Cost: 1 Wood, 1 Stone)</small></span>
+                <button onclick="craft('arrows')">Craft</button>
             </div>
         </div>
+        <button class="close-crafting" onclick="toggleCraftingMenu()">Close (E)</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        if (typeof THREE === 'undefined') {
-            document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');
-        }
-    </script>
 
     <script>
-        let craftItemFn = null;
-
         window.addEventListener('load', () => {
             if (typeof THREE === 'undefined') {
-                alert("Three.js failed to load. Please check your connection.");
+                alert("Three.js failed to load. Please refresh the page.");
                 return;
             }
             initGame();
         });
 
+        let craft = null;
+        let toggleCraftingMenu = null;
+
         function initGame() {
-            // --- 1. Procedural Pixel Textures ---
+            // --- 1. Texture Generator ---
             function createPixelTexture(baseHex, noiseScale = 25, pattern = '') {
                 const canvas = document.createElement('canvas');
                 canvas.width = 16; canvas.height = 16;
@@ -189,7 +194,7 @@
                 } else if (pattern === 'craft_top') {
                     ctx.fillStyle = '#b37e46';
                     ctx.fillRect(2, 2, 12, 12);
-                    ctx.fillStyle = '#444';
+                    ctx.fillStyle = '#333';
                     ctx.fillRect(4, 4, 3, 3); ctx.fillRect(9, 9, 3, 3);
                 } else if (pattern === 'chest') {
                     ctx.fillStyle = '#3a2412';
@@ -215,7 +220,7 @@
                 grassSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33', 25, 'grass_side') }),
                 dirt: new THREE.MeshLambertMaterial({ map: createPixelTexture('#855d33') }),
                 stone: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373') }),
-                water: new THREE.MeshLambertMaterial({ color: 0x1f5fad, transparent: true, opacity: 0.6 }),
+                water: new THREE.MeshLambertMaterial({ color: 0x1f5fad, transparent: true, opacity: 0.65 }),
                 woodSide: new THREE.MeshLambertMaterial({ map: createPixelTexture('#61462b') }),
                 woodTop: new THREE.MeshLambertMaterial({ map: createPixelTexture('#7a5c3e') }),
                 planks: new THREE.MeshLambertMaterial({ map: createPixelTexture('#9c7349') }),
@@ -223,10 +228,11 @@
                 chestMat: new THREE.MeshLambertMaterial({ map: createPixelTexture('#805229', 20, 'chest') }),
                 leaves: new THREE.MeshLambertMaterial({ map: createPixelTexture('#2d6e1a'), transparent: true, opacity: 0.9 }),
                 ironOre: new THREE.MeshLambertMaterial({ map: createPixelTexture('#737373', 25, 'iron') }),
-                bedrock: new THREE.MeshLambertMaterial({ map: createPixelTexture('#222222', 40) }),
+                bedrock: new THREE.MeshLambertMaterial({ map: createPixelTexture('#1a1a1a', 50) }),
                 zombie: new THREE.MeshLambertMaterial({ map: createPixelTexture('#2e7d32') }),
                 skeleton: new THREE.MeshLambertMaterial({ map: createPixelTexture('#cccccc') }),
                 fishMat: new THREE.MeshLambertMaterial({ color: 0xff6600 }),
+                boatMat: new THREE.MeshLambertMaterial({ map: createPixelTexture('#805229') }),
                 iron: new THREE.MeshLambertMaterial({ color: 0xd8d8d8 }),
                 woodHandle: new THREE.MeshLambertMaterial({ color: 0x5c4028 })
             };
@@ -258,6 +264,7 @@
                 if (playerHealth <= 0) {
                     playerHealth = 100;
                     camera.position.set(0, 15, 0);
+                    if (currentBoat) exitBoat();
                 }
                 updateHealthUI();
             }
@@ -267,10 +274,10 @@
                 2: { name: 'Sword', type: 'tool', has: false },
                 3: { name: 'Bow', type: 'tool', has: false },
                 4: { name: 'Arrows', type: 'ammo', count: 10 },
-                5: { name: 'Meat', type: 'item', count: 0 },
-                6: { name: 'Wood', type: 'block', blockType: 5, count: 0 },
-                7: { name: 'Planks', type: 'block', blockType: 7, count: 0 },
-                8: { name: 'Craft Table', type: 'block', blockType: 8, count: 1 },
+                5: { name: 'Wood', type: 'block', blockType: 5, count: 0 },
+                6: { name: 'Planks', type: 'block', blockType: 7, count: 0 },
+                7: { name: 'Craft Table', type: 'block', blockType: 8, count: 1 },
+                8: { name: 'Boat', type: 'boat', count: 0 },
                 9: { name: 'Stone', type: 'block', blockType: 3, count: 0 }
             };
 
@@ -289,36 +296,45 @@
                 }
             }
 
-            craftItemFn = function(type) {
-                if (type === 'planks' && inventory[6].count >= 1) {
-                    inventory[6].count -= 1; inventory[7].count += 4;
-                } else if (type === 'craftTable' && inventory[7].count >= 4) {
-                    inventory[7].count -= 4; inventory[8].count += 1;
-                } else if (type === 'sword' && inventory[6].count >= 1) {
-                    inventory[6].count -= 1; inventory[2].has = true;
-                } else if (type === 'bow' && inventory[6].count >= 3) {
-                    inventory[6].count -= 3; inventory[3].has = true;
-                } else if (type === 'arrows' && inventory[6].count >= 1) {
-                    inventory[6].count -= 1; inventory[4].count += 5;
+            // Fixed Crafting System Logic
+            craft = function(recipe) {
+                if (recipe === 'planks' && inventory[5].count >= 1) {
+                    inventory[5].count -= 1;
+                    inventory[6].count += 4;
+                    showNotification("Crafted 4x Planks!");
+                } else if (recipe === 'craftTable' && inventory[6].count >= 4) {
+                    inventory[6].count -= 4;
+                    inventory[7].count += 1;
+                    showNotification("Crafted Crafting Table!");
+                } else if (recipe === 'boat' && inventory[6].count >= 5) {
+                    inventory[6].count -= 5;
+                    inventory[8].count += 1;
+                    showNotification("Crafted Wooden Boat!");
+                } else if (recipe === 'sword' && inventory[5].count >= 2 && inventory[9].count >= 2) {
+                    inventory[5].count -= 2;
+                    inventory[9].count -= 2;
+                    inventory[2].has = true;
+                    showNotification("Crafted Stone Sword!");
+                } else if (recipe === 'bow' && inventory[5].count >= 3) {
+                    inventory[5].count -= 3;
+                    inventory[3].has = true;
+                    showNotification("Crafted Bow!");
+                } else if (recipe === 'arrows' && inventory[5].count >= 1 && inventory[9].count >= 1) {
+                    inventory[5].count -= 1;
+                    inventory[9].count -= 1;
+                    inventory[4].count += 5;
+                    showNotification("Crafted 5x Arrows!");
+                } else {
+                    showNotification("Not enough materials!");
                 }
                 updateHotbarUI();
             };
 
-            document.addEventListener('keydown', (e) => {
-                if (e.key >= '1' && e.key <= '9') {
-                    activeSlot = parseInt(e.key);
-                    updateHotbarUI();
-                    updateHeldItemVisibility();
-                } else if (e.code === 'KeyE' && gameActive) {
-                    toggleCraftingMenu();
-                }
-            });
-
-            function showLootNotification(text) {
-                const lootEl = document.getElementById('loot-notification');
-                lootEl.innerText = text;
-                lootEl.style.display = 'block';
-                setTimeout(() => { lootEl.style.display = 'none'; }, 2500);
+            function showNotification(text) {
+                const el = document.getElementById('notification');
+                el.innerText = text;
+                el.style.display = 'block';
+                setTimeout(() => { el.style.display = 'none'; }, 2000);
             }
 
             // --- 4. Scene & Lighting ---
@@ -326,7 +342,7 @@
             const dayColor = new THREE.Color(0x6eb1e8);
             const nightColor = new THREE.Color(0x050814);
             scene.background = dayColor.clone();
-            scene.fog = new THREE.FogExp2(dayColor.clone(), 0.025);
+            scene.fog = new THREE.FogExp2(dayColor.clone(), 0.022);
 
             const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             scene.add(camera);
@@ -346,7 +362,7 @@
             let isNight = false;
 
             function updateDayNightCycle() {
-                dayTime += 0.0003;
+                dayTime += 0.0002;
                 const cycle = (Math.sin(dayTime) + 1) / 2;
                 isNight = cycle < 0.35;
 
@@ -356,8 +372,6 @@
 
                 ambientLight.intensity = Math.max(0.15, cycle * 0.65);
                 dirLight.intensity = Math.max(0.05, cycle * 0.7);
-                dirLight.position.x = Math.cos(dayTime) * 80;
-                dirLight.position.y = Math.sin(dayTime) * 80;
             }
 
             // --- 5. Held Items ---
@@ -394,27 +408,33 @@
             let isSwinging = false, swingProgress = 0;
             function triggerSwing() { if (!isSwinging) { isSwinging = true; swingProgress = 0; } }
 
-            // --- 6. World Engine (Trees, Deep Ocean & Caves) ---
+            // --- 6. World Generation (Deep Oceans & Caves) ---
             const geometry = new THREE.BoxGeometry(1, 1, 1);
             const blocks = new Map();
             const loadedChunks = new Map();
             const CHUNK_SIZE = 10;
             const RENDER_DISTANCE = 2;
-            const SEA_LEVEL = 3;
-            const MIN_Y = -20;
+            const SEA_LEVEL = 4;
+            const MIN_Y = -30; // Deeper world underground
 
             function getBlockKey(x, y, z) { return `${x},${y},${z}`; }
             function getChunkKey(cx, cz) { return `${cx},${cz}`; }
 
+            // Extended terrain function with deeper ocean basins (down to 15 blocks below sea level)
             function getTerrainHeight(x, z) {
-                const terrain = Math.sin(x * 0.08) * Math.cos(z * 0.08) * 7 + Math.sin((x + z) * 0.04) * 4;
-                return Math.floor(terrain);
+                const base = Math.sin(x * 0.06) * Math.cos(z * 0.06) * 10 + Math.sin((x + z) * 0.03) * 6;
+                if (base < SEA_LEVEL) {
+                    // Carve out deep ocean floors
+                    const oceanDepth = (SEA_LEVEL - base) * 2.2;
+                    return Math.floor(SEA_LEVEL - oceanDepth);
+                }
+                return Math.floor(base);
             }
 
             function isCave(x, y, z) {
                 if (y >= getTerrainHeight(x, z) - 1) return false;
-                const caveVal = Math.sin(x * 0.25) + Math.cos(y * 0.3) + Math.sin(z * 0.25);
-                return caveVal > 1.25;
+                const caveVal = Math.sin(x * 0.22) + Math.cos(y * 0.28) + Math.sin(z * 0.22);
+                return caveVal > 1.2;
             }
 
             function createBlock(x, y, z, type, chunkKey) {
@@ -429,44 +449,21 @@
 
             function buildTree(x, surfaceY, z, chunkKey) {
                 const trunkHeight = 4 + Math.floor(Math.random() * 2);
-                
-                // Spawn Wood Trunk
                 for (let y = 1; y <= trunkHeight; y++) {
                     createBlock(x, surfaceY + y, z, 5, chunkKey);
                 }
-
-                // Spawn Leaf Canopy
                 const leafStart = surfaceY + trunkHeight - 1;
                 for (let lx = -2; lx <= 2; lx++) {
                     for (let lz = -2; lz <= 2; lz++) {
                         for (let ly = 0; ly <= 2; ly++) {
-                            if (Math.abs(lx) === 2 && Math.abs(lz) === 2) continue; // Round the corners
-                            const px = x + lx;
-                            const py = leafStart + ly;
-                            const pz = z + lz;
-                            const bKey = getBlockKey(px, py, pz);
-                            if (!blocks.has(bKey)) {
+                            if (Math.abs(lx) === 2 && Math.abs(lz) === 2) continue;
+                            const px = x + lx, py = leafStart + ly, pz = z + lz;
+                            if (!blocks.has(getBlockKey(px, py, pz))) {
                                 createBlock(px, py, pz, 6, chunkKey);
                             }
                         }
                     }
                 }
-            }
-
-            function buildVillage(x, surfaceY, z, chunkKey) {
-                for (let vx = -2; vx <= 2; vx++) {
-                    for (let vz = -2; vz <= 2; vz++) {
-                        for (let vy = 1; vy <= 3; vy++) {
-                            const isWall = (Math.abs(vx) === 2 || Math.abs(vz) === 2);
-                            if (isWall && !(vx === 0 && vz === -2 && vy < 3)) {
-                                createBlock(x + vx, surfaceY + vy, z + vz, 7, chunkKey);
-                            } else if (vy === 3) {
-                                createBlock(x + vx, surfaceY + vy + 1, z + vz, 5, chunkKey);
-                            }
-                        }
-                    }
-                }
-                createBlock(x, surfaceY + 1, z + 1, 11, chunkKey);
             }
 
             function generateChunk(cx, cz) {
@@ -486,41 +483,32 @@
 
                             let bMesh = null;
                             if (y === MIN_Y) {
-                                bMesh = createBlock(x, y, z, 10, chunkKey);
+                                bMesh = createBlock(x, y, z, 10, chunkKey); // Bedrock bottom
                             } else if (y === height) {
-                                if (height <= SEA_LEVEL) {
-                                    bMesh = createBlock(x, y, z, 2, chunkKey);
-                                } else {
-                                    bMesh = createBlock(x, y, z, 1, chunkKey);
-                                }
+                                bMesh = createBlock(x, y, z, height <= SEA_LEVEL ? 2 : 1, chunkKey);
                             } else if (y > height && y <= SEA_LEVEL) {
-                                bMesh = createBlock(x, y, z, 4, chunkKey);
+                                bMesh = createBlock(x, y, z, 4, chunkKey); // Water
                             } else if (y > height - 3) {
-                                bMesh = createBlock(x, y, z, 2, chunkKey);
+                                bMesh = createBlock(x, y, z, 2, chunkKey); // Dirt
                             } else {
-                                bMesh = createBlock(x, y, z, (Math.random() < 0.08 ? 9 : 3), chunkKey);
+                                bMesh = createBlock(x, y, z, Math.random() < 0.08 ? 9 : 3, chunkKey); // Stone/Iron
                             }
                             if (bMesh) chunkBlocks.push(bMesh);
                         }
 
-                        // Trees spawn on grass land
                         if (height > SEA_LEVEL + 1 && Math.random() < 0.035) {
                             buildTree(x, height, z, chunkKey);
                         }
                     }
                 }
 
-                // Spawn Villages on flat high ground or Fish in oceans
                 const midH = getTerrainHeight(startX + 5, startZ + 5);
-                if (midH > SEA_LEVEL + 1) {
-                    if (cx % 3 === 0 && cz % 3 === 0 && cx !== 0) buildVillage(startX + 5, midH, startZ + 5, chunkKey);
-                } else if (midH < SEA_LEVEL - 2) {
-                    if (Math.random() < 0.6) spawnFish(startX + 5, SEA_LEVEL - 1, startZ + 5);
+                if (midH < SEA_LEVEL - 3 && Math.random() < 0.7) {
+                    spawnFish(startX + 5, SEA_LEVEL - 2, startZ + 5);
                 }
 
-                if (isNight) {
-                    if (Math.random() < 0.3) spawnMob('zombie', startX + 5, startZ + 5);
-                    if (Math.random() < 0.2) spawnMob('skeleton', startX + 2, startZ + 2);
+                if (isNight && Math.random() < 0.3) {
+                    spawnMob('zombie', startX + 5, startZ + 5);
                 }
 
                 loadedChunks.set(chunkKey, chunkBlocks);
@@ -552,22 +540,82 @@
                 for (let key of loadedChunks.keys()) if (!needed.has(key)) unloadChunk(key);
             }
 
-            function getSolidHeightBelow(x, z, startY) {
-                const rx = Math.round(x);
-                const rz = Math.round(z);
-                for (let y = Math.floor(startY); y >= MIN_Y; y--) {
-                    const bKey = getBlockKey(rx, y, rz);
-                    if (blocks.has(bKey)) {
-                        const type = blocks.get(bKey).userData.type;
-                        if (type !== 4 && type !== 6) { // Ignore water and leaves for standing floor
-                            return y;
+            // --- 7. Full 3D Player Collision (Fixes Invisible Barrier & Digging Bugs) ---
+            const playerRadius = 0.3;
+            const playerHeight = 1.6;
+
+            function isSolidBlockAt(x, y, z) {
+                const bx = Math.floor(x + 0.5);
+                const by = Math.floor(y + 0.5);
+                const bz = Math.floor(z + 0.5);
+                const block = blocks.get(getBlockKey(bx, by, bz));
+                if (!block) return false;
+                const type = block.userData.type;
+                // Water (4) and Leaves (6) do not block player standard body physics
+                return type !== 4 && type !== 6;
+            }
+
+            function checkPlayerCollision(newPos) {
+                const minX = newPos.x - playerRadius;
+                const maxX = newPos.x + playerRadius;
+                const minY = newPos.y - 1.5;
+                const maxY = newPos.y + 0.2;
+                const minZ = newPos.z - playerRadius;
+                const maxZ = newPos.z + playerRadius;
+
+                for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) {
+                    for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
+                        for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) {
+                            const block = blocks.get(getBlockKey(x, y, z));
+                            if (block && block.userData.type !== 4 && block.userData.type !== 6) {
+                                return true;
+                            }
                         }
                     }
                 }
-                return MIN_Y;
+                return false;
             }
 
-            // --- 7. Mobs & Swimming Fish ---
+            // --- 8. Boat System ---
+            const boatsList = [];
+            let currentBoat = null;
+
+            function createBoatMesh(x, y, z) {
+                const boatGroup = new THREE.Group();
+                const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.3, 2.2), materials.boatMat);
+                base.position.y = 0.15;
+                const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 2.2), materials.boatMat);
+                leftWall.position.set(-0.65, 0.4, 0);
+                const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 2.2), materials.boatMat);
+                rightWall.position.set(0.65, 0.4, 0);
+                const frontWall = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 0.1), materials.boatMat);
+                frontWall.position.set(0, 0.4, -1.05);
+                const backWall = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 0.1), materials.boatMat);
+                backWall.position.set(0, 0.4, 1.05);
+
+                boatGroup.add(base, leftWall, rightWall, frontWall, backWall);
+                boatGroup.position.set(x, y, z);
+                scene.add(boatGroup);
+
+                const boatObj = { group: boatGroup, speed: 0, rotSpeed: 0 };
+                boatsList.push(boatObj);
+                return boatObj;
+            }
+
+            function enterBoat(boatObj) {
+                currentBoat = boatObj;
+                showNotification("Riding Boat! Press E or Right-Click to Exit.");
+            }
+
+            function exitBoat() {
+                if (currentBoat) {
+                    camera.position.y += 1.2;
+                    currentBoat = null;
+                    showNotification("Exited Boat.");
+                }
+            }
+
+            // --- 9. Mobs & Swimming Fish ---
             const mobs = [];
             const arrows = [];
             const fishList = [];
@@ -586,7 +634,6 @@
             function spawnMob(type, x, z) {
                 const mob = new THREE.Group();
                 const mat = type === 'zombie' ? materials.zombie : materials.skeleton;
-                
                 const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.4), mat);
                 body.position.y = 0.6;
                 const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat);
@@ -597,27 +644,20 @@
                 mob.position.set(x, y, z);
                 scene.add(mob);
 
-                mobs.push({ group: mob, body, head, type, hp: type === 'zombie' ? 5 : 3, attackTimer: 0 });
+                mobs.push({ group: mob, body, head, type, hp: 5 });
             }
 
-            function shootArrow(fromPos, dir, isHostile = false) {
-                const arrowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.5), materials.iron);
-                arrowMesh.position.copy(fromPos);
-                scene.add(arrowMesh);
-                arrows.push({ mesh: arrowMesh, dir: dir.clone().normalize(), isHostile, life: 100 });
-            }
-
-            // --- 8. UI & Menu Systems ---
+            // --- 10. Controls & Interface ---
             const instructions = document.getElementById('instructions');
             const craftingMenu = document.getElementById('crafting-menu');
             let gameActive = false, isCraftingOpen = false;
 
-            function toggleCraftingMenu() {
+            toggleCraftingMenu = function() {
                 isCraftingOpen = !isCraftingOpen;
                 craftingMenu.style.display = isCraftingOpen ? 'block' : 'none';
                 if (isCraftingOpen) document.exitPointerLock();
                 else document.body.requestPointerLock();
-            }
+            };
 
             instructions.addEventListener('click', () => {
                 gameActive = true;
@@ -635,13 +675,23 @@
             });
 
             const keys = {};
-            document.addEventListener('keydown', e => keys[e.code] = true);
+            document.addEventListener('keydown', e => {
+                keys[e.code] = true;
+                if (e.key >= '1' && e.key <= '9') {
+                    activeSlot = parseInt(e.key);
+                    updateHotbarUI();
+                    updateHeldItemVisibility();
+                } else if (e.code === 'KeyE' && gameActive) {
+                    if (currentBoat) exitBoat();
+                    else toggleCraftingMenu();
+                }
+            });
             document.addEventListener('keyup', e => keys[e.code] = false);
 
-            camera.position.set(0, 12, 5);
+            camera.position.set(0, 10, 0);
             updateChunks();
 
-            // --- 9. Raycasting & Interaction ---
+            // --- 11. Raycasting & Actions ---
             const raycaster = new THREE.Raycaster();
 
             document.addEventListener('mousedown', (e) => {
@@ -650,8 +700,7 @@
 
                 if (e.button === 0) { // Mine / Attack
                     raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-                    const mobTargets = mobs.map(m => m.body);
-                    const intersects = raycaster.intersectObjects([...Array.from(blocks.values()), ...mobTargets]);
+                    const intersects = raycaster.intersectObjects([...Array.from(blocks.values()), ...mobs.map(m => m.body)]);
 
                     if (intersects.length > 0 && intersects[0].distance < 5) {
                         const hit = intersects[0].object;
@@ -670,50 +719,53 @@
                         if (blocks.has(bKey)) {
                             const bType = hit.userData.type;
                             if (bType === 10 || bType === 4) return;
-                            if (bType === 5) inventory[6].count++; // Harvest Wood
-                            else if (bType === 3) inventory[9].count++; // Harvest Stone
+                            if (bType === 5) inventory[5].count++; // Wood
+                            else if (bType === 3) inventory[9].count++; // Stone
                             scene.remove(hit);
                             blocks.delete(bKey);
                             updateHotbarUI();
                         }
                     }
-                } else if (e.button === 2) { // Right Click Place/Open
+                } else if (e.button === 2) { // Right Click Interact / Place
                     raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-                    const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
-
-                    if (intersects.length > 0 && intersects[0].distance < 5) {
-                        const hit = intersects[0].object;
-                        if (hit.userData.type === 11) {
-                            const lootArrows = Math.floor(Math.random() * 8) + 5;
-                            const lootMeat = Math.floor(Math.random() * 3) + 1;
-                            inventory[4].count += lootArrows;
-                            inventory[5].count += lootMeat;
-                            showLootNotification(`Found +${lootArrows} Arrows & +${lootMeat} Meat!`);
-                            
-                            scene.remove(hit);
-                            blocks.delete(getBlockKey(hit.userData.x, hit.userData.y, hit.userData.z));
-                            updateHotbarUI();
-                            return;
+                    
+                    // Check if clicking existing Boat to enter
+                    const boatHits = raycaster.intersectObjects(boatsList.map(b => b.group.children[0]));
+                    if (boatHits.length > 0 && boatHits[0].distance < 4) {
+                        if (currentBoat) exitBoat();
+                        else {
+                            const clickedBoat = boatsList.find(b => b.group.children.includes(boatHits[0].object));
+                            if (clickedBoat) enterBoat(clickedBoat);
                         }
+                        return;
                     }
 
-                    if (activeSlot === 3 && inventory[3].has && inventory[4].count > 0) {
-                        inventory[4].count--;
-                        updateHotbarUI();
-                        shootArrow(camera.position, camera.getWorldDirection(new THREE.Vector3()), false);
-                    } else {
+                    const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
+                    if (intersects.length > 0 && intersects[0].distance < 5) {
+                        const hit = intersects[0];
+                        if (hit.object.userData.type === 8) { // Click Crafting Table Block
+                            toggleCraftingMenu();
+                            return;
+                        }
+
                         const item = inventory[activeSlot];
-                        if (item.type === 'block' && item.count > 0) {
-                            if (intersects.length > 0 && intersects[0].distance < 5) {
-                                const hit = intersects[0];
-                                const n = hit.face.normal;
-                                const px = hit.object.userData.x + n.x;
-                                const py = hit.object.userData.y + n.y;
-                                const pz = hit.object.userData.z + n.z;
-                                createBlock(px, py, pz, item.blockType, hit.object.userData.chunkKey);
-                                item.count--;
-                                updateHotbarUI();
-                            }
+                        if (item.type === 'boat' && item.count > 0) {
+                            // Spawn Boat in water/surface
+                            const n = hit.face.normal;
+                            const bx = hit.object.userData.x + n.x;
+                            const by = hit.object.userData.y + n.y;
+                            const bz = hit.object.userData.z + n.z;
+                            createBoatMesh(bx, SEA_LEVEL + 0.1, bz);
+                            item.count--;
+                            updateHotbarUI();
+                        } else if (item.type === 'block' && item.count > 0) {
+                            const n = hit.face.normal;
+                            const px = hit.object.userData.x + n.x;
+                            const py = hit.object.userData.y + n.y;
+                            const pz = hit.object.userData.z + n.z;
+                            createBlock(px, py, pz, item.blockType, hit.object.userData.chunkKey);
+                            item.count--;
+                            updateHotbarUI();
                         }
                     }
                 }
@@ -721,7 +773,7 @@
 
             document.addEventListener('contextmenu', e => e.preventDefault());
 
-            // --- 10. Main Game Loop ---
+            // --- 12. Main Game Loop ---
             let velocityY = 0, isGrounded = false;
 
             function animate() {
@@ -730,31 +782,61 @@
                 if (gameActive && !isCraftingOpen) {
                     updateDayNightCycle();
 
-                    const speed = (keys['ShiftLeft'] || keys['ShiftRight']) ? 0.2 : 0.11;
-                    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); forward.y = 0; forward.normalize();
-                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); right.y = 0; right.normalize();
+                    if (currentBoat) {
+                        // Boat Physics & Steering Controls
+                        if (keys['KeyW']) currentBoat.speed = Math.min(currentBoat.speed + 0.008, 0.22);
+                        else if (keys['KeyS']) currentBoat.speed = Math.max(currentBoat.speed - 0.008, -0.1);
+                        else currentBoat.speed *= 0.95;
 
-                    let moveX = 0, moveZ = 0;
-                    if (keys['KeyW']) { moveX += forward.x * speed; moveZ += forward.z * speed; }
-                    if (keys['KeyS']) { moveX -= forward.x * speed; moveZ -= forward.z * speed; }
-                    if (keys['KeyA']) { moveX -= right.x * speed; moveZ -= right.z * speed; }
-                    if (keys['KeyD']) { moveX += right.x * speed; moveZ += right.z * speed; }
+                        if (keys['KeyA']) currentBoat.group.rotation.y += 0.03;
+                        if (keys['KeyD']) currentBoat.group.rotation.y -= 0.03;
 
-                    if (keys['Space'] && isGrounded) { velocityY = 0.17; isGrounded = false; }
+                        currentBoat.group.translateZ(-currentBoat.speed);
+                        currentBoat.group.position.y = SEA_LEVEL + 0.1;
 
-                    velocityY -= 0.009;
-                    camera.position.x += moveX; camera.position.z += moveZ; camera.position.y += velocityY;
+                        // Attach player to boat position
+                        camera.position.x = currentBoat.group.position.x;
+                        camera.position.y = currentBoat.group.position.y + 0.8;
+                        camera.position.z = currentBoat.group.position.z;
+                    } else {
+                        // Standard Walking Physics with Full AABB Collision Box
+                        const moveSpeed = (keys['ShiftLeft'] || keys['ShiftRight']) ? 0.18 : 0.11;
+                        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); forward.y = 0; forward.normalize();
+                        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); right.y = 0; right.normalize();
 
-                    const floorY = getSolidHeightBelow(camera.position.x, camera.position.z, camera.position.y - 0.5);
-                    if (camera.position.y < floorY + 1.5) {
-                        camera.position.y = floorY + 1.5;
-                        velocityY = 0; isGrounded = true;
+                        let moveX = 0, moveZ = 0;
+                        if (keys['KeyW']) { moveX += forward.x * moveSpeed; moveZ += forward.z * moveSpeed; }
+                        if (keys['KeyS']) { moveX -= forward.x * moveSpeed; moveZ -= forward.z * moveSpeed; }
+                        if (keys['KeyA']) { moveX -= right.x * moveSpeed; moveZ -= right.z * moveSpeed; }
+                        if (keys['KeyD']) { moveX += right.x * moveSpeed; moveZ += right.z * moveSpeed; }
+
+                        // Check X axis collision
+                        const nextPosX = camera.position.clone(); nextPosX.x += moveX;
+                        if (!checkPlayerCollision(nextPosX)) camera.position.x = nextPosX.x;
+
+                        // Check Z axis collision
+                        const nextPosZ = camera.position.clone(); nextPosZ.z += moveZ;
+                        if (!checkPlayerCollision(nextPosZ)) camera.position.z = nextPosZ.z;
+
+                        // Check Gravity & Jump
+                        if (keys['Space'] && isGrounded) { velocityY = 0.18; isGrounded = false; }
+
+                        velocityY -= 0.009;
+                        const nextPosY = camera.position.clone(); nextPosY.y += velocityY;
+
+                        if (checkPlayerCollision(nextPosY)) {
+                            if (velocityY < 0) isGrounded = true;
+                            velocityY = 0;
+                        } else {
+                            camera.position.y = nextPosY.y;
+                            isGrounded = false;
+                        }
                     }
 
                     updateChunks();
                 }
 
-                // Fish Swimming Animation
+                // Fish Movement
                 fishList.forEach(f => {
                     f.timer += 0.03;
                     f.group.position.x += Math.cos(f.timer) * 0.02;
@@ -762,47 +844,14 @@
                     f.group.rotation.y = f.timer;
                 });
 
-                // Arrow Movement
-                for (let i = arrows.length - 1; i >= 0; i--) {
-                    const arr = arrows[i];
-                    arr.mesh.position.addScaledVector(arr.dir, 0.4);
-                    arr.life--;
-
-                    if (arr.isHostile && arr.mesh.position.distanceTo(camera.position) < 1.0) {
-                        takeDamage(15);
-                        scene.remove(arr.mesh); arrows.splice(i, 1);
-                        continue;
-                    }
-
-                    if (arr.life <= 0) { scene.remove(arr.mesh); arrows.splice(i, 1); }
-                }
-
-                // Mob AI & Night Burning Logic
-                for (let i = mobs.length - 1; i >= 0; i--) {
-                    const m = mobs[i];
-
-                    if (!isNight) {
-                        scene.remove(m.group);
-                        mobs.splice(i, 1);
-                        continue;
-                    }
-
-                    const dist = m.group.position.distanceTo(camera.position);
-                    if (dist < 14) {
+                // Mobs AI
+                mobs.forEach(m => {
+                    if (m.group.position.distanceTo(camera.position) < 12) {
                         m.group.lookAt(camera.position.x, m.group.position.y, camera.position.z);
-                        if (m.type === 'zombie') {
-                            m.group.translateZ(0.03);
-                            if (dist < 1.2) takeDamage(0.5);
-                        } else if (m.type === 'skeleton') {
-                            m.attackTimer++;
-                            if (m.attackTimer > 100) {
-                                const dir = new THREE.Vector3().subVectors(camera.position, m.group.position);
-                                shootArrow(m.group.position, dir, true);
-                                m.attackTimer = 0;
-                            }
-                        }
+                        m.group.translateZ(0.025);
+                        if (m.group.position.distanceTo(camera.position) < 1.2) takeDamage(0.4);
                     }
-                }
+                });
 
                 renderer.render(scene, camera);
             }
